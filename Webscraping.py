@@ -10,6 +10,7 @@ from time import sleep
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import NoSuchFrameException
 from selenium.common.exceptions import WebDriverException
+import datetime
 
 class Scraper:
     def __init__(self, URL, currency_list):
@@ -18,6 +19,7 @@ class Scraper:
         self.URL = URL
         self.url_list = []
         self.link_list = []
+        self.image_list = []
         self.dict_currencies = {'Currency': [], 'Open': [], 'High': [], 'Low': [], 'Close': []}
     
     #Open the webpage and accept the consent cookie
@@ -27,8 +29,6 @@ class Scraper:
         time.sleep(2)
         
         try:
-            WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, '//*[@id="consent-page"]')))
-            self.driver.switch_to.frame('consent-page')
             accept_cookies_button = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, '//button[@value="agree"]')))
             accept_cookies_button.click() 
             time.sleep(2)
@@ -43,12 +43,32 @@ class Scraper:
         for curr in currency_list:
             self.dict_currencies['Currency'].append(curr)
             st_url = '//a[@title="' + str(curr) + '"]'
-            c = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, st_url))) # Change this xpath with the xpath the current page has in their properties
+            c = self.driver.find_element(By.XPATH, st_url) # Change this xpath with the xpath the current page has in their properties
             a_tag = c.find_element(by=By.TAG_NAME, value='a')
             link = a_tag.get_attribute('href')
             self.link_list.append(link)
             time.sleep(2)
+            
         return self.link_list
+    
+    def get_image(self):
+        for curr in currency_list:
+            # get the summary tab
+            self.driver.find_element(by=By.XPATH, value='//*[@id="quote-nav"]/ul/li[1]/a/span').click()
+            time.sleep(2)
+            # get the graph for 1 day
+            self.driver.find_element(by=By.XPATH, value='//*[@id="interactive-2col-qsp-m"]/ul/li[1]/button').click()
+            time.sleep(2)
+            curr.replace("/","")
+            xp = '//*[@id="' +curr +'=X-interactive-2col-qsp-m"]'
+            # identify image
+            image = self.driver.find_element(by=By.XPATH, value=xp)
+            # get src of image
+            image_src = image.get_attribute("src")
+            #add image link to image_list
+            self.image_list.append(image_src) 
+            
+        return self.image_list
     
     def make_curr_dict(self):
         #Collecting the data and putting it in a dictionary
@@ -68,11 +88,18 @@ class Scraper:
             
             return self.dict_currencies
     
+    def get_dict_of_dict(self):
+        # ct stores current time
+        ct = datetime.datetime.now()
+        self.dict_currencies['Graph Link'] = self.image_list
+        ct_dict = {ct : self.dict_currencies}
+        return ct_dict
+    
 if __name__ == "__main__":
     currency_list = ['GBP/USD', 'GBP/EUR', 'GBPJPY', 'GBP/AUD', 'GBP/CAD', 'GBP/CHF']
     URL = 'https://uk.finance.yahoo.com/currencies/'
     scrape = Scraper(URL, currency_list)
     scrape.open_and_accept_cookie()
     scrape.get_currency_link(currency_list)
-    
+    driver.quit()
     
