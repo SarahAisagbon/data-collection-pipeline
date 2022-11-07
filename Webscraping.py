@@ -2,6 +2,7 @@ from lib2to3.pgen2 import driver
 from urllib.request import urlcleanup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import unittest
@@ -26,6 +27,13 @@ class Scraper:
         self.image_list = []
         self.dict_currencies = { i :  {'Date': [],'Open': [], 'High': [], 'Low': [], 'Close': []} for i in currency_list }
     
+    #scroll the page
+    def scroll_page(self):
+        self.driver.get(self.URL)
+        html = self.driver.find_element(by=By.TAG_NAME, value = 'html')
+        html.send_keys(Keys.PAGE_DOWN)
+        time.sleep(2)
+    
     #Open the webpage and accept the consent cookie
     def open_and_accept_cookie(self):
         self.driver.get(self.URL)
@@ -41,7 +49,7 @@ class Scraper:
             pass
         except NoSuchFrameException:
             pass
-
+        
     #For each currency in the list, creating the url and putting it in a list and method to find the page link for each currency
     def get_currency_link(self, currency_list):
         for curr in currency_list:
@@ -112,7 +120,7 @@ class Scraper:
         except OSError:
             print ('Error: Creating directory. ' +  directory)
     
-    def main(self, URL, currency_list):
+    def main(self):
         self.open_and_accept_cookie()
         self.get_currency_link(currency_list)
         self.get_image(currency_list)
