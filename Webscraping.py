@@ -62,25 +62,6 @@ class Scraper:
             
         return self.link_list
     
-    def get_image(self, currency_list):
-        for curr in currency_list:
-            # get the summary tab
-            self.driver.find_element(by=By.XPATH, value='//*[@id="quote-nav"]/ul/li[1]/a/span').click()
-            time.sleep(2)
-            # get the graph for 5 day
-            self.driver.find_element(by=By.XPATH, value='//*[@id="interactive-2col-qsp-m"]/ul/li[2]/button').click()
-            time.sleep(2)
-            curr.replace("/","")
-            xp = '//*[@id="' +curr +'=X-interactive-2col-qsp-m"]'
-            # identify image
-            image = self.driver.find_element(by=By.XPATH, value=xp)
-            # get src of image
-            image_src = image.get_attribute("src")
-            #add image link to image_list
-            self.image_list.append(image_src) 
-            
-        return self.image_list
-    
     def make_curr_dict(self):
         #Collecting the data and putting it in a dictionary
         for l in self.link_list:
@@ -89,7 +70,7 @@ class Scraper:
             time.sleep(2)
             dict = {'Date': [], 'Open': [], 'High': [], 'Low': [], 'Close': []}
             i = 0
-            while i < 6:
+            while i < 5:
                 date = self.driver.find_element(by=By.XPATH, value='//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr[1]/td[1]/span').text
                 self.dict['Date'].append(date)
                 open = self.driver.find_element(by=By.XPATH, value='//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr[1]/td[2]/span').text
@@ -106,10 +87,27 @@ class Scraper:
                 self.dict_currencies[curr].update(dict)
                 
             return self.dict_currencies
+        
+    def get_image(self, currency_list):
+        for curr in currency_list:
+            # get the summary tab
+            self.driver.find_element(by=By.XPATH, value='//*[@id="quote-nav"]/ul/li[1]/a/span').click()
+            time.sleep(2)
+            # get the graph for 5 day
+            self.driver.find_element(by=By.XPATH, value='//*[@id="interactive-2col-qsp-m"]/ul/li[2]/button').click()
+            time.sleep(2)
+            c = curr.replace("/","")
+            xp = '//*[@id="' +c +'=X-interactive-2col-qsp-m"]'
+            # identify image
+            image = self.driver.find_element(by=By.XPATH, value=xp)
+            # get src of image
+            image_src = image.get_attribute("src")
+            #add image link to dict_currencies
+            self.dict_currencies[curr]['Graph Link'] = image_src
+            
+        return self.dict_currencies
     
     def get_dict_of_dict(self):
-        
-        self.dict_currencies['Graph Link'] = self.image_list
         ct_dict = {self.ct : self.dict_currencies}
         return ct_dict
     
