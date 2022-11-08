@@ -20,8 +20,8 @@ from uuid import uuid4
 class Scraper:
     def __init__(self, URL, currency_list):
         self.currency_list = currency_list
-        self.driver = webdriver.Safari()
         self.URL = URL
+        self.driver = webdriver.Safari()
         self.id = str(uuid4())
         self.currency_link_list = []
 
@@ -51,20 +51,22 @@ class Scraper:
     #For each currency in the list, creating the url and putting it in a list and method to find the page link for each currency
     def create_list_of_currency_links(self, currency_list):
         for currency_element in currency_list:
-            str_url = '//a[@title="' + str(currency_element) + '"]'
-            xpath = self.driver.find_element(By.XPATH, str_url) # Change this xpath with the xpath the current page has in their properties
+            urlstr = '//a[@title="' + str(currency_element) + '"]'
+            xpath = self.driver.find_element(By.XPATH, urlstr) # Change this xpath with the xpath the current page has in their properties
             link = xpath.get_attribute('href')
             self.currency_link_list.append(link)
             time.sleep(2)
             
         return self.currency_link_list
     
-    def create_currency_dictionary(self, currency_link):
-        #Collecting the data and putting it in a dictionary
+    def create_currency_dictionary(self, link):
+        # get links from 
         self.driver.get(currency_link)
         # get the Historical Data tab
         self.driver.find_element(by=By.XPATH, value='//*[@id="quote-nav"]/ul/li[4]/a').click()
         time.sleep(2)
+        
+        # create a price_dictionary 
         price_dictionary = {'Date': [], 'Open': [], 'High': [], 'Low': [], 'Close': []}
         
         counter = 0
@@ -83,7 +85,7 @@ class Scraper:
             i += 1
             
         # Update the dict_currencies dictionary with the new info for each currency
-        index = self.currency_link_list.index(currency_link)
+        index = self.currency_link_list.index(link)
         currency_element = self.currency_list[index]
             
         # create new currency_data dictionary 
@@ -112,9 +114,9 @@ class Scraper:
         time.sleep(2)
         
         index = self.currency_link_list.index(link)
-        curr = self.currency_list[index]
-        c = curr.replace("/","")
-        xp = '//*[@id="' +c +'=X-interactive-2col-qsp-m"]'
+        currency_element = self.currency_list[index]
+        currency_element = currency_element.replace("/","")
+        xp = '//*[@id="' + currency_element +'=X-interactive-2col-qsp-m"]'
         
         # identify image
         image = self.driver.find_element(by=By.XPATH, value=xp)
