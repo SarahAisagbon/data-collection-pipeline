@@ -11,22 +11,20 @@ from time import sleep
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import NoSuchFrameException
 from selenium.common.exceptions import WebDriverException
+import requests
 import datetime
 import os 
 import json
+from uuid import uuid4
 
 class Scraper:
     def __init__(self, URL, currency_list):
         self.currency_list = currency_list
         self.driver = webdriver.Safari()
         self.URL = URL
-        # ct stores current time
-        self.ct = datetime.datetime.now()
-        self.url_list = []
-        self.link_list = []
-        self.image_list = []
-        self.dict_currencies = { i :  {'Date': [],'Open': [], 'High': [], 'Low': [], 'Close': []} for i in currency_list }
-    
+        self.id = str(uuid4())
+        self.currency_link_list = []
+
     #scroll the page
     def scroll_page(self):
         self.driver.get(self.URL)
@@ -51,88 +49,128 @@ class Scraper:
             pass
         
     #For each currency in the list, creating the url and putting it in a list and method to find the page link for each currency
-    def get_currency_link(self, currency_list):
-        for curr in currency_list:
-            st_url = '//a[@title="' + str(curr) + '"]'
-            c = self.driver.find_element(By.XPATH, st_url) # Change this xpath with the xpath the current page has in their properties
-            a_tag = c.find_element(by=By.TAG_NAME, value='a')
-            link = a_tag.get_attribute('href')
-            self.link_list.append(link)
+    def create_list_of_currency_links(self, currency_list):
+        for currency_element in currency_list:
+            str_url = '//a[@title="' + str(currency_element) + '"]'
+            xpath = self.driver.find_element(By.XPATH, str_url) # Change this xpath with the xpath the current page has in their properties
+            link = xpath.get_attribute('href')
+            self.currency_link_list.append(link)
             time.sleep(2)
             
-        return self.link_list
+        return self.currency_link_list
     
-    def make_curr_dict(self):
+    def create_currency_dictionary(self, currency_link):
         #Collecting the data and putting it in a dictionary
-        for l in self.link_list:
-            self.driver.get(l)
-            self.driver.find_element(by=By.XPATH, value='//span[text() = "Historical Data"]').click()
-            time.sleep(2)
-            dict = {'Date': [], 'Open': [], 'High': [], 'Low': [], 'Close': []}
-            i = 0
-            while i < 5:
-                date = self.driver.find_element(by=By.XPATH, value='//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr[1]/td[1]/span').text
-                self.dict['Date'].append(date)
-                open = self.driver.find_element(by=By.XPATH, value='//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr[1]/td[2]/span').text
-                self.dict['Open'].append(open)
-                high = self.driver.find_element(by=By.XPATH, value='//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr[1]/td[3]/span').text
-                self.dict['High'].append(high)
-                low = self.driver.find_element(by=By.XPATH, value='//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr[1]/td[4]/span').text
-                self.dict['Low'].append(low)
-                close = self.driver.find_element(by=By.XPATH, value='//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr[1]/td[5]/span').text
-                self.dict['Close'].append(close)
-            
-            # Update the dict_currencies dictionary with the new info for each currency
-            for curr in currency_list:
-                self.dict_currencies[curr].update(dict)
-                
-            return self.dict_currencies
+        self.driver.get(currency_link)
+        # get the Historical Data tab
+        self.driver.find_element(by=By.XPATH, value='//*[@id="quote-nav"]/ul/li[4]/a').click()
+        time.sleep(2)
+        price_dictionary = {'Date': [], 'Open': [], 'High': [], 'Low': [], 'Close': []}
         
-    def get_image(self, currency_list):
-        for curr in currency_list:
-            # get the summary tab
-            self.driver.find_element(by=By.XPATH, value='//*[@id="quote-nav"]/ul/li[1]/a/span').click()
-            time.sleep(2)
-            # get the graph for 5 day
-            self.driver.find_element(by=By.XPATH, value='//*[@id="interactive-2col-qsp-m"]/ul/li[2]/button').click()
-            time.sleep(2)
-            c = curr.replace("/","")
-            xp = '//*[@id="' +c +'=X-interactive-2col-qsp-m"]'
-            # identify image
-            image = self.driver.find_element(by=By.XPATH, value=xp)
-            # get src of image
-            image_src = image.get_attribute("src")
-            #add image link to dict_currencies
-            self.dict_currencies[curr]['Graph Link'] = image_src
+        counter = 0
+        while i < 5:
+            j = counter + 1
+            date = self.driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr['+str(j)+']/td[1]/span').text
+            price_dictionary['Date'].append(date)
+            open = self.driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr['+str(j)+']/td[2]/span').text
+            price_dictionary['Open'].append(open)
+            high = self.driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr['+str(j)+']/td[3]/span').text
+            price_dictionary['High'].append(high)
+            low = self.driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr['+str(j)+']/td[4]/span').text
+            price_dictionary['Low'].append(low)
+            close = self.driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr['+str(j)+']/td[5]/span').text
+            price_dictionary['Close'].append(close)
+            i += 1
             
-        return self.dict_currencies
+        # Update the dict_currencies dictionary with the new info for each currency
+        index = self.currency_link_list.index(currency_link)
+        currency_element = self.currency_list[index]
+            
+        # create new currency_data dictionary 
+        self.currency_data = {"title": currency_element,
+                        "id": self.id,
+                        "currency price": price_dictionary,
+                        "timestamp": datetime.datetime.now() #current time
+                        #"Graph": local_filepath
+        }
+            
+        return self.currency_data
     
-    def get_dict_of_dict(self):
-        ct_dict = {self.ct : self.dict_currencies}
-        return ct_dict
+    def download_image(img_url, fp):
+        img_data = requests.get(img_url).content
+        with open(fp, 'wb') as handler:
+            handler.write(img_data)
     
-    def createFolder(directory):
+    def get_image_link(self, link):
+        self.driver.get(link)
+        # get the summary tab
+        self.driver.find_element(by=By.XPATH, value='//*[@id="quote-nav"]/ul/li[1]/a/span').click()
+        time.sleep(2)
+        
+        # get the graph for 5 day
+        self.driver.find_element(by=By.XPATH, value='//*[@id="interactive-2col-qsp-m"]/ul/li[2]/button').click()
+        time.sleep(2)
+        
+        index = self.currency_link_list.index(link)
+        curr = self.currency_list[index]
+        c = curr.replace("/","")
+        xp = '//*[@id="' +c +'=X-interactive-2col-qsp-m"]'
+        
+        # identify image
+        image = self.driver.find_element(by=By.XPATH, value=xp)
+        # get src of image
+        image_src = image.img.attrs['src']
+
+    def check_if_file_exists(self, path):
+        counter = 1
+        while True:
+            if not path.exists():
+                return path
+            else:
+                path.split('.')
+                path = path[0] + '_' + counter + path[1]
+                if not path.exists():
+                    return path
+                else:
+                    counter += 1
+        
+    def createFolder(self, dir):
         try:
-            if not os.path.exists(directory):
-                os.makedirs(directory)
+            if not os.path.exists(dir):
+                os.mkdir(dir)
         except OSError:
-            print ('Error: Creating directory. ' +  directory)
+            print ('Error: Creating directory. ' +  dir)
+            pass
     
+    def createjsonFile(self, dir,):
+        # Create raw_data folder and a subfolder named after the id 
+        self.createFolder(dir)
+        # Save the dictionary as a file called data.json
+        with open('{dir}/{self.id}/data.json', 'w') as fp:
+            json.dump(self.currency_data, fp)
+
     def main(self):
         self.open_and_accept_cookie()
-        self.get_currency_link(currency_list)
-        self.get_image(currency_list)
-        self.make_curr_dict()
-        self.get_dict_of_dict()
-        # Create raw_data folder and a subfolder named after the current date 
-        self.createFolder('./raw_data/'+str(scrape.ct))
-        # Save the dictionary as a file called data.json
-        with open('data.json', 'w') as fp:
-            json.dump(self.ct_dict, fp)
+        self.create_list_of_currency_links(currency_list)
+        for link in self.currency_link_list:
+            image_src = self.get_image_link(link)
+            dir = './raw_data/'
+            timestr = time.strftime('%d%m%Y_%H%M%S')
+            subfolder = 'image'
+            path = dir/subfolder/timestr.jpg
+            self.check_if_file_exists(self, str(path))
+            img = self.download_image(image_src, str(path))
+            
+            # create currency dictionary for each currency 
+            self.create_currency_dictionary(link)
+            # create a json file named after the id
+            self.createjsonFile(dir)
+            
+            
         driver.quit()
         
 if __name__ == "__main__":
-    currency_list = ['GBP/USD', 'GBP/EUR', 'GBPJPY', 'GBP/AUD', 'GBP/CAD', 'GBP/CHF']
+    currency_list = ['GBP/USD', 'GBP/EUR', 'GBP/JPY', 'GBP/AUD', 'GBP/CAD', 'GBP/CHF']
     URL = 'https://uk.finance.yahoo.com/currencies/'
     scrape = Scraper(URL, currency_list)
     scrape.main()
