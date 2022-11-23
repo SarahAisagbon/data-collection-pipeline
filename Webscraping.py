@@ -11,7 +11,9 @@ from urllib.request import urlcleanup
 from uuid import uuid4
 import datetime
 import json
+import io
 import os 
+from PIL import Image
 import requests
 import time 
 from time import sleep
@@ -37,26 +39,30 @@ class Scraper:
         '''
         See help(Scraper) for accurate signature
         '''
+        
         self.currency_list = currency_list
         self.URL = URL
         self.driver = webdriver.Safari()
         self.currency_link_list = []
-        self.required_details = ["Currency", "Currency Prices", "Timestamp", "Image", "UUID"]
+        self.required_details = ["Currency", "Currency Prices", "Image", "Timestamp", "UUID"]
         self.currency_dictionary = {self.required_details[i]: ["Unknown"] for i in range(len(self.required_details))}
 
+    '''
     def scroll_page(self):
-        '''
+        
         This function is used to scroll a page.
-        '''
+        
         self.driver.get(self.URL)
         html = self.driver.find_element(by=By.TAG_NAME, value = "html")
         html.send_keys(Keys.PAGE_DOWN)
         time.sleep(2)
+    '''
     
     def open_and_accept_cookie(self):
         '''
         This function is used to open the webpage and accept the consent cookie.
         '''
+        
         self.driver.get(self.URL)
         self.driver.maximize_window()
         time.sleep(2)
@@ -82,6 +88,7 @@ class Scraper:
         Returns:
             list: list of string representation of the currency link.
         '''
+        
         for currency_element in currency_list:
             urlstr = '//a[@title="' + str(currency_element) + '"]'
             xpath = self.driver.find_element(By.XPATH, urlstr) # Change this xpath with the xpath the current page has in their properties
@@ -100,6 +107,7 @@ class Scraper:
         Returns:
             dictionary
         '''
+        
         # get links from website
         self.driver.get(link)
         # get the Historical Data tab
@@ -110,7 +118,7 @@ class Scraper:
         price_dictionary = {"Date": [], "Open": [], "High": [], "Low": [], "Close": []}
         
         counter = 0
-        while i < 5:
+        while counter < 5:
             j = counter + 1
             date = self.driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr['+str(j)+']/td[1]/span').text
             price_dictionary['Date'].append(date)
@@ -122,12 +130,12 @@ class Scraper:
             price_dictionary['Low'].append(low)
             close = self.driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr['+str(j)+']/td[5]/span').text
             price_dictionary['Close'].append(close)
-            i += 1
+            counter += 1
         
         return price_dictionary
     
     def __assign_uuid(self):
-            '''
+        '''
         This generates a random uuid.
         
         Returns:
@@ -136,18 +144,26 @@ class Scraper:
         UUID = str(uuid4())
         return UUID
     
-    def __download_image(self, image_scr, fp):
+    def create_currency_dictionary(self, link):
         '''
-        This function is used to download a image from the website and saves it in a subfolder.
+        This function puts all the above data into the currency dictionary.
         
         Args:
-            fp: the string representation of the path for the subfolder.
-            image_src: the string representation of the scr for the image.
-            
+            link: the string representation of the link for a page. Will be from currency_link_list.
         '''
-        img_data = requests.get(image_scr).content
-        with open(fp, 'wb') as handler:
-            handler.write(img_data)
+        
+        index = self.currency_link_list.index(link)
+        # Update the dict_currencies dictionary with the new info for each currency
+        currency_element = self.currency_list[index]
+            
+        # create new currency_data dictionary 
+        self.currency_dictionary["Currency"] = currency_element
+        self.currency_dictionary["Currency Prices"] =  Scraper.__extract_information(link)
+        self.currency_dictionary["Image"] = Scraper.__get_image_link(self)
+        self.currency_dictionary["Timestamp"] = str(datetime.datetime.now()) #current time
+        self.currency_dictionary["UUID"] = Scraper.__assign_uuid()
+            
+        return self.currency_dictionary
     
     def __get_image_link(self, link):
         '''
@@ -159,48 +175,49 @@ class Scraper:
         Returns:
             image_scr: the string representation of the scr for the image.
         '''
+        
         self.driver.get(link)
         # get the summary tab
         self.driver.find_element(by=By.XPATH, value='//*[@id="quote-nav"]/ul/li[1]/a/span').click()
-        time.sleep(2)
+        time.sleep(1)
         
-        # get the graph for 5 day
-        self.driver.find_element(by=By.XPATH, value='//*[@id="interactive-2col-qsp-m"]/ul/li[2]/button').click()
-        time.sleep(2)
+        # idetify the graph for logo
+        image = self.driver.find_element(by=By.XPATH, value="//*[@id='uh-logo']")
+        time.sleep(1)
         
-        index = self.currency_link_list.index(link)
-        currency_element = self.currency_list[index]
-        currency_element = currency_element.replace("/","")
-        xp = '//*[@id="' + currency_element +'=X-interactive-2col-qsp-m"]'
-        
-        # identify image
-        image = self.driver.find_element(by=By.XPATH, value=xp)
         # get src of image
-        image_src = image.img.attrs["src"]
+        image_src = image.get_attribute("src")
         
         return image_src
     
-    def create_currency_dictionary(self, link):
+    def __download_image(self, image_scr, path):
         '''
-        This function puts all the above data into the currency dictionary.
+        This function is used to download a image from the website and saves it in a subfolder.
         
         Args:
-            link: the string representation of the link for a page. Will be from currency_link_list.
+            fp: the string representation of the path for the subfolder.
+            image_src: the string representation of the scr for the image.
         '''
-        # Update the dict_currencies dictionary with the new info for each currency
-        index = self.__create_list_of_currency_links.index(link)
-        currency_element = self.currency_list[index]
-            
-        # create new currency_data dictionary 
-        self.currency_dictionary["Currency"] = currency_element
-        self.currency_dictionary["UUID"] = Scraper.__assign_uuid(self)
-        self.currency_dictionary["Currency Prices"] =  Scraper.__extract_information(self, link)
-        self.currency_dictionary["Timestamp"] = datetime.datetime.now() #current time
-        #self.currency_dictionary["Graph"] = local_filepath
-            
-        return self.currency_dictionary
+        
+        try:
+            # Download the image.  If timeout is exceeded, throw an error.
+            image_content = requests.get(image_scr).content
+            time.sleep(2)
 
-    def check_if_file_exists(self, path):
+        except Exception as e:
+            print(f"ERROR - Could not download {image_scr} - {e}")
+            
+        try:
+            # Convert the image into a bit stream, then save it.
+            image_file = io.BytesIO(image_content)
+            image = Image.open(image_file).convert("RGB")
+            with open(path, "wb") as f:
+                image.save(f, "JPEG", quality=85)
+            
+        except Exception as e:
+            print(f"ERROR - Could not save {image_scr} - {e}")
+            
+    def __check_if_file_exists(self, path):
         '''
         This function is used to check if image file exists. If it does, add the order in the title.
 
@@ -209,7 +226,7 @@ class Scraper:
         '''
         counter = 1
         while True:
-            if not os.path.exists():
+            if not os.path.exists(path):
                 return path
             else:
                 path.split(".")
@@ -219,7 +236,7 @@ class Scraper:
                 else:
                     counter += 1
                     
-    def createFolder(self, path):
+    def __createFolder(self, path):
         '''
         This function is used to create a folder.
         
@@ -233,7 +250,7 @@ class Scraper:
             print ("Error: Creating directory. " +  path)
             pass
     
-    def __currency_folder(self, link, path):
+    def __currency_folder(self, currency_dict, path):
         '''
         This function is used to create a raw_data folder and a UUID subfolder and saves the dictionary in the subfolder as a file called data.json.
 
@@ -243,53 +260,60 @@ class Scraper:
             
         '''
         
-        currency_dict = Scraper.create_currency_dictionary(link)
-        
-        currency_id = currency_dict["UUID"]
-        currency_path = path + f"/{currency_id}"
-    
         # Create raw_data folder 
-        Scraper.createFolder(currency_path)
+        Scraper.__createFolder(path)
+        
+        currency_id = currency_dict["Currency"]
+        currency_id = currency_id.replace("/","")
+        currency_path = path + f"{currency_id}"
+    
+        # Create ID folder 
+        Scraper.__createFolder(currency_path)
+        
         # Save the dictionary as a file called data.json in a subfolder named after the id 
         with open(f"{currency_path}/data.json", 'w') as fp:
             json.dump(currency_dict, fp)
 
-    def __image_folder(self, link, path):
+    def __image_folder(self, currency_dict, link, path):
         '''
         This function is used to create a image folder and a image file and saves the image in the file.
 
         Args:
+            currency_dict: the dictionary
             link: the string representation of the link for a page. Will be from currency_link_list.
             path: the string representation of the path for the new folder.
             
         '''
         
-        currency_dict = Scraper.create_currency_dictionary(link)
-        
-        currency_id = currency_dict["UUID"]
-        image_src = Scraper.get_image_link(link)
+        currency_id = currency_dict["Currency"]
+        currency_id = currency_id.replace("/","")
+        image_scr = self.__get_image_link(link)
         image_folder_path = path + f"/{currency_id}/images"
         # Create image folder 
-        Scraper.createFolder(image_folder_path)
+        Scraper.__createFolder(image_folder_path)
         
         #Create file with the title in the form <date>_<time>_<order of image>.<image file extension>
         timestr = time.strftime('%d%m%Y_%H%M%S')
         image_file_path = image_folder_path + f"/{timestr}.jpg"
-        Scraper.check_if_file_exists(str(image_file_path))
+        Scraper.__check_if_file_exists(str(image_file_path))
         
         #Download and save the image in the file created above
-        img = Scraper.download_image(image_src, image_file_path)
+        
+        img = Scraper.__download_image(image_scr, image_file_path)
+    
+    def download_all_data(self, currency_dict, link, path):
+        Scraper.__currency_folder(currency_dict, path)
+        Scraper.__image_folder(currency_dict, link, path)
         
     def main(self):
-        self.open_and_accept_cookie()
-        self.create_list_of_currency_links(Scraper.currency_list)
-        for link in self.currency_link_list:
+        Scraper.open_and_accept_cookie()
+        Scraper.__create_list_of_currency_links(currency_list)
+        for link in Scraper.currency_link_list:
+            index = Scraper.currency_link_list.index(link)
             path = "/Users/sarahaisagbon/Documents/GitHub/data-collection-pipeline/raw_data/"
-            # create currency dictionary for each currency 
-            self.create_currency_dictionary(link)
+            currency_dict = Scraper.create_currency_dictionary(link)
             # create a json file named after the id
-            self.__currency_folder(link, path)
-            self.__image_folder(link, path)
+            Scraper.download_all_data
         driver.quit()
     
 if __name__ == "__main__":
