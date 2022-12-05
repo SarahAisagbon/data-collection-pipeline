@@ -1,4 +1,5 @@
 from lib2to3.pgen2 import driver
+from PIL import Image
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -7,13 +8,16 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import NoSuchFrameException
 from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.safari.options import Options
+from selenium.webdriver.safari.service import Service
+
 from urllib.request import urlcleanup
 from uuid import uuid4
 import datetime
 import json
 import io
 import os 
-from PIL import Image
+import re
 import requests
 import time 
 from time import sleep
@@ -35,35 +39,61 @@ class Scraper:
         currency_dictionary (dict): all the desired details for each currency.
     
     '''
-    def __init__(self, URL, currency_list):
+    def __init__(self, URL, currency_list, *args, **kwargs):
         '''
         See help(Scraper) for accurate signature
         '''
+        super(Scraper, self).__init__(*args, **kwargs)
         
         self.currency_list = currency_list
         self.URL = URL
-        self.driver = webdriver.Safari()
+        safariOptions = Options()
+        safariOptions.add_argument("--no-sandbox") #Bypass OS security model
+        safariOptions.add_argument("--headless")
+        safariOptions.add_argument("window-size=1920,1080")
+        safariOptions.add_argument('--disable-extensions') #disabling extensions
+        safariOptions.add_argument("--disable-dev-shm-usage") #overcome limited resource problems
+        safariOptions.add_argument("--disable-setuid-sandbox") 
+        safariOptions.add_argument('--disable-gpu')
+        
+        self.driver = webdriver.Safari(
+            executable_path = "/usr/bin/safaridriver",
+            options = safariOptions
+        )
+        
+        '''
+        self.driver = webdriver.Remote(
+            command_executor='/usr/bin/safaridriver',
+            command_executor='http://X.X.X.X:4444/wd/hub',
+            command_executor='http://localhost:4444/wd/hub',
+            command_executor='/usr/bin/safaridriver',
+            command_executor='http://selenium:4444/wd/hub'
+            options = safariOptions
+        )
+        '''
+        
         self.currency_link_list = []
         self.required_details = ["Currency", "Currency Prices", "Image", "Timestamp", "UUID"]
         self.currency_dictionary = {self.required_details[i]: ["Unknown"] for i in range(len(self.required_details))}
 
-    '''
-    def scroll_page(self):
-        
+    
+    def scroll_page(self, URL):
+        '''
         This function is used to scroll a page.
+        '''
         
-        self.driver.get(self.URL)
+        self.driver.get(URL)
         html = self.driver.find_element(by=By.TAG_NAME, value = "html")
         html.send_keys(Keys.PAGE_DOWN)
         time.sleep(2)
-    '''
+
     
-    def open_and_accept_cookie(self):
+    def open_and_accept_cookie(self, URL):
         '''
         This function is used to open the webpage and accept the consent cookie.
         '''
         
-        self.driver.get(self.URL)
+        self.driver.get(URL)
         self.driver.maximize_window()
         time.sleep(2)
         
@@ -78,7 +108,7 @@ class Scraper:
         except NoSuchFrameException:
             pass
 
-    def __create_list_of_currency_links(self, currency_list):
+    def __get_list_of_currency_links(self, currency_list):
         '''
         This function is used to create the url for each currency in the currency_list, gets the link and return the list of currency links.
         
@@ -90,8 +120,8 @@ class Scraper:
         '''
         
         for currency_element in currency_list:
-            urlstr = '//a[@title="' + str(currency_element) + '"]'
-            xpath = self.driver.find_element(By.XPATH, urlstr) # Change this xpath with the xpath the current page has in their properties
+            currencyurl = '//a[@title="' + str(currency_element) + '"]'
+            xpath = self.driver.find_element(By.XPATH, currencyurl) # Change this xpath with the xpath the current page has in their properties
             link = xpath.get_attribute("href")
             self.currency_link_list.append(link)
             time.sleep(2)
@@ -121,17 +151,17 @@ class Scraper:
         while counter < 5:
             j = counter + 1
             date = self.driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr['+str(j)+']/td[1]/span').text
-            price_dictionary['Date'].append(date)
+            price_dictionary["Date"].append(date)
             open = self.driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr['+str(j)+']/td[2]/span').text
-            price_dictionary['Open'].append(open)
+            price_dictionary["Open"].append(open)
             high = self.driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr['+str(j)+']/td[3]/span').text
-            price_dictionary['High'].append(high)
+            price_dictionary["High"].append(high)
             low = self.driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr['+str(j)+']/td[4]/span').text
-            price_dictionary['Low'].append(low)
+            price_dictionary["Low"].append(low)
             close = self.driver.find_element(By.XPATH, '//*[@id="Col1-1-HistoricalDataTable-Proxy"]/section/div[2]/table/tbody/tr['+str(j)+']/td[5]/span').text
-            price_dictionary['Close'].append(close)
+            price_dictionary["Close"].append(close)
             counter += 1
-        
+        print("Information has been scraped")
         return price_dictionary
     
     def __assign_uuid(self):
@@ -158,11 +188,12 @@ class Scraper:
             
         # create new currency_data dictionary 
         self.currency_dictionary["Currency"] = currency_element
-        self.currency_dictionary["Currency Prices"] =  Scraper.__extract_information(link)
-        self.currency_dictionary["Image"] = Scraper.__get_image_link(self)
+        self.currency_dictionary["Currency Prices"] =  self.__extract_information(link)
+        self.currency_dictionary["Image"] = self.__get_image_link(link)
         self.currency_dictionary["Timestamp"] = str(datetime.datetime.now()) #current time
-        self.currency_dictionary["UUID"] = Scraper.__assign_uuid()
-            
+        self.currency_dictionary["UUID"] = self.__assign_uuid()
+        
+        print("Information has been placed in dictionary")
         return self.currency_dictionary
     
     def __get_image_link(self, link):
@@ -181,12 +212,12 @@ class Scraper:
         self.driver.find_element(by=By.XPATH, value='//*[@id="quote-nav"]/ul/li[1]/a/span').click()
         time.sleep(1)
         
-        # idetify the graph for logo
-        image = self.driver.find_element(by=By.XPATH, value="//*[@id='uh-logo']")
-        time.sleep(1)
+        # identify the website logo
+        img_property = WebDriverWait(self.driver, 10).until(EC.visibility_of_element_located((By.XPATH, "//*[@id='uh-logo']"))).value_of_css_property("background-image")
         
         # get src of image
-        image_src = image.get_attribute("src")
+        image_src = str(re.split('[()]',img_property)[1])
+        image_src = image_src[1:-1]
         
         return image_src
     
@@ -212,7 +243,7 @@ class Scraper:
             image_file = io.BytesIO(image_content)
             image = Image.open(image_file).convert("RGB")
             with open(path, "wb") as f:
-                image.save(f, "JPEG", quality=85)
+                image.save(f, "JPEG", quality=100)
             
         except Exception as e:
             print(f"ERROR - Could not save {image_scr} - {e}")
@@ -261,17 +292,17 @@ class Scraper:
         '''
         
         # Create raw_data folder 
-        Scraper.__createFolder(path)
+        self.__createFolder(path)
         
         currency_id = currency_dict["Currency"]
         currency_id = currency_id.replace("/","")
         currency_path = path + f"{currency_id}"
     
         # Create ID folder 
-        Scraper.__createFolder(currency_path)
+        self.__createFolder(currency_path)
         
         # Save the dictionary as a file called data.json in a subfolder named after the id 
-        with open(f"{currency_path}/data.json", 'w') as fp:
+        with open(f"{currency_path}/data.json", "w") as fp:
             json.dump(currency_dict, fp)
 
     def __image_folder(self, currency_dict, link, path):
@@ -290,35 +321,36 @@ class Scraper:
         image_scr = self.__get_image_link(link)
         image_folder_path = path + f"/{currency_id}/images"
         # Create image folder 
-        Scraper.__createFolder(image_folder_path)
+        self.__createFolder(image_folder_path)
         
         #Create file with the title in the form <date>_<time>_<order of image>.<image file extension>
         timestr = time.strftime('%d%m%Y_%H%M%S')
         image_file_path = image_folder_path + f"/{timestr}.jpg"
-        Scraper.__check_if_file_exists(str(image_file_path))
+        self.__check_if_file_exists(str(image_file_path))
         
         #Download and save the image in the file created above
         
-        img = Scraper.__download_image(image_scr, image_file_path)
+        img = self.__download_image(image_scr, image_file_path)
     
     def download_all_data(self, currency_dict, link, path):
-        Scraper.__currency_folder(currency_dict, path)
-        Scraper.__image_folder(currency_dict, link, path)
+        self.__currency_folder(currency_dict, path)
+        self.__image_folder(currency_dict, link, path)
+        print("Download completed!")
         
-    def main(self):
-        Scraper.open_and_accept_cookie()
-        Scraper.__create_list_of_currency_links(currency_list)
-        for link in Scraper.currency_link_list:
-            index = Scraper.currency_link_list.index(link)
-            path = "/Users/sarahaisagbon/Documents/GitHub/data-collection-pipeline/raw_data/"
-            currency_dict = Scraper.create_currency_dictionary(link)
+    def ScrapingTime(self):
+        scrape.open_and_accept_cookie(URL)
+        scrape.__get_list_of_currency_links(currency_list)
+        for link in self.currency_link_list:
+            index = self.currency_link_list.index(link)
+            path = "/Users/sarahaisagbon/Documents/GitHub/data-collection-pipeline/Project/raw_data/"
+            currency_dict = self.create_currency_dictionary(link)
             # create a json file named after the id
-            Scraper.download_all_data
-        driver.quit()
+            self.download_all_data(currency_dict, link, path)
+        self.driver.quit()
     
 if __name__ == "__main__":
     currency_list = ['GBP/USD', 'GBP/EUR', 'GBP/JPY', 'GBP/AUD', 'GBP/CAD', 'GBP/CHF']
     URL = 'https://uk.finance.yahoo.com/currencies/'
     scrape = Scraper(URL, currency_list)
-    scrape.main()
+    scrape.ScrapingTime()
     
