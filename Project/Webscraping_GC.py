@@ -1,4 +1,3 @@
-from lib2to3.pgen2 import driver
 from PIL import Image
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -7,11 +6,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import NoSuchFrameException
-from selenium.common.exceptions import WebDriverException
-from selenium.webdriver.safari.options import Options
-from selenium.webdriver.safari.service import Service
+from selenium.webdriver.firefox.options import Options
 
-from urllib.request import urlcleanup
+
 from uuid import uuid4
 import datetime
 import json
@@ -20,8 +17,6 @@ import os
 import re
 import requests
 import time 
-from time import sleep
-import unittest
 
 class Scraper:
     ### Google
@@ -47,30 +42,19 @@ class Scraper:
         
         self.currency_list = currency_list
         self.URL = URL
-        safariOptions = Options()
-        safariOptions.add_argument("--no-sandbox") #Bypass OS security model
-        safariOptions.add_argument("--headless")
-        safariOptions.add_argument("window-size=1920,1080")
-        safariOptions.add_argument('--disable-extensions') #disabling extensions
-        safariOptions.add_argument("--disable-dev-shm-usage") #overcome limited resource problems
-        safariOptions.add_argument("--disable-setuid-sandbox") 
-        safariOptions.add_argument('--disable-gpu')
+        firefoxOptions = Options()
+        firefoxOptions.add_argument("--no-sandbox") #Bypass OS security model
         
-        self.driver = webdriver.Safari(
-            executable_path = "/usr/bin/safaridriver",
-            options = safariOptions
+        firefoxOptions.add_argument("--headless")
+        firefoxOptions.add_argument("window-size=1920,1080")
+        firefoxOptions.add_argument('--disable-extensions') #disabling extensions
+        firefoxOptions.add_argument("--disable-dev-shm-usage") #overcome limited resource problems
+        firefoxOptions.add_argument('--disable-gpu')
+
+        self.driver = webdriver.Firefox(
+            executable_path = "/usr/local/bin/geckodriver",
+            options = firefoxOptions
         )
-        
-        '''
-        self.driver = webdriver.Remote(
-            command_executor='/usr/bin/safaridriver',
-            command_executor='http://X.X.X.X:4444/wd/hub',
-            command_executor='http://localhost:4444/wd/hub',
-            command_executor='/usr/bin/safaridriver',
-            command_executor='http://selenium:4444/wd/hub'
-            options = safariOptions
-        )
-        '''
         
         self.currency_link_list = []
         self.required_details = ["Currency", "Currency Prices", "Image", "Timestamp", "UUID"]
@@ -101,14 +85,17 @@ class Scraper:
             accept_cookies_button = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, '//button[@value="agree"]')))
             accept_cookies_button.click() 
             time.sleep(2)
-            return("Cookie Accepted")
+            return('Cookie Accepted')
         except TimeoutException:
-            print("Loading took too much time!")
+            print('Loading took too much time!')
             pass
         except NoSuchFrameException:
             pass
-
-    def __get_list_of_currency_links(self, currency_list):
+        
+    def close_browser(self):
+        self.driver.close()
+        
+    def get_list_of_currency_links(self, currency_list):
         '''
         This function is used to create the url for each currency in the currency_list, gets the link and return the list of currency links.
         
@@ -124,7 +111,7 @@ class Scraper:
             xpath = self.driver.find_element(By.XPATH, currencyurl) # Change this xpath with the xpath the current page has in their properties
             link = xpath.get_attribute("href")
             self.currency_link_list.append(link)
-            time.sleep(2)
+            
         return self.currency_link_list
 
     def __extract_information(self, link):
@@ -141,7 +128,7 @@ class Scraper:
         # get links from website
         self.driver.get(link)
         # get the Historical Data tab
-        self.driver.find_element(by=By.XPATH, value='//*[@id="quote-nav"]/ul/li[4]/a').click()
+        self.driver.find_element(by=By.XPATH, value='//*[@data-test="HISTORICAL_DATA"]').click()
         time.sleep(2)
         
         # create a price_dictionary 
@@ -209,7 +196,7 @@ class Scraper:
         
         self.driver.get(link)
         # get the summary tab
-        self.driver.find_element(by=By.XPATH, value='//*[@id="quote-nav"]/ul/li[1]/a/span').click()
+        self.driver.find_element(by=By.XPATH, value='//*[@data-test="SUMMARY"]').click()
         time.sleep(1)
         
         # identify the website logo
@@ -241,7 +228,7 @@ class Scraper:
         try:
             # Convert the image into a bit stream, then save it.
             image_file = io.BytesIO(image_content)
-            image = Image.open(image_file).convert("RGB")
+            image = Image.open(image_file).convert("RGBA")
             with open(path, "wb") as f:
                 image.save(f, "JPEG", quality=100)
             
@@ -288,7 +275,6 @@ class Scraper:
         Args:
             link: the string representation of the link for a page. Will be from currency_link_list.
             path: the string representation of the path for the new folder.
-            
         '''
         
         # Create raw_data folder 
@@ -339,7 +325,7 @@ class Scraper:
         
     def ScrapingTime(self):
         scrape.open_and_accept_cookie(URL)
-        scrape.__get_list_of_currency_links(currency_list)
+        scrape.get_list_of_currency_links(currency_list)
         for link in self.currency_link_list:
             index = self.currency_link_list.index(link)
             path = "/Users/sarahaisagbon/Documents/GitHub/data-collection-pipeline/Project/raw_data/"
